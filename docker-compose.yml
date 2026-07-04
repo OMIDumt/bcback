@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: business_coaching_db
+    environment:
+      POSTGRES_DB: business_coaching_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: business_coaching_api
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/business_coaching_db
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      DEBUG: "False"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: python main.py
+
+volumes:
+  postgres_data:
