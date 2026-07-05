@@ -107,15 +107,18 @@ def chat_test_page():
         conversationId = data.id;
         setStatus('Conversation created: ' + conversationId);
         renderMessage('System', 'Conversation ready.');
+        return true;
       } catch (error) {
         showError(error.message || 'Unknown error');
+        return false;
       }
     }
 
     async function sendMessage() {
       try {
         if (!conversationId) {
-          await createConversation();
+          const created = await createConversation();
+          if (!created) return;
         }
         const message = document.getElementById('messageInput').value.trim();
         if (!message) return;
