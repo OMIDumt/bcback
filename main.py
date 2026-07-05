@@ -84,44 +84,62 @@ def chat_test_page():
     const apiBase = window.location.origin + '/api/chat';
     let conversationId = null;
 
+    async function parseResponse(res) {
+      const text = await res.text();
+      try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; }
+    }
+
+    function showError(message) {
+      setStatus('Error: ' + message);
+      renderMessage('System', 'Error: ' + message);
+    }
+
     async function createConversation() {
       setStatus('Creating conversation...');
-      const res = await fetch(apiBase + '/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'Railway Test' })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to create conversation');
-      conversationId = data.id;
-      setStatus('Conversation created: ' + conversationId);
-      renderMessage('System', 'Conversation ready.');
+      try {
+        const res = await fetch(apiBase + '/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: 'Railway Test' })
+        });
+        const data = await parseResponse(res);
+        if (!res.ok) throw new Error(data.detail || data.raw || 'Failed to create conversation');
+        conversationId = data.id;
+        setStatus('Conversation created: ' + conversationId);
+        renderMessage('System', 'Conversation ready.');
+      } catch (error) {
+        showError(error.message || 'Unknown error');
+      }
     }
 
     async function sendMessage() {
-      if (!conversationId) {
-        await createConversation();
+      try {
+        if (!conversationId) {
+          await createConversation();
+        }
+        const message = document.getElementById('messageInput').value.trim();
+        if (!message) return;
+        setStatus('Sending message...');
+        const res = await fetch(apiBase + '/conversations/' + conversationId + '/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        const data = await parseResponse(res);
+        if (!res.ok) throw new Error(data.detail || data.raw || 'Failed to send message');
+        renderMessage('You', message);
+        renderMessage('Assistant', data.assistant_message?.content || 'No response');
+        setStatus('Message sent');
+        document.getElementById('messageInput').value = '';
+      } catch (error) {
+        showError(error.message || 'Unknown error');
       }
-      const message = document.getElementById('messageInput').value.trim();
-      if (!message) return;
-      setStatus('Sending message...');
-      const res = await fetch(apiBase + '/conversations/' + conversationId + '/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to send message');
-      renderMessage('You', message);
-      renderMessage('Assistant', data.assistant_message.content);
-      setStatus('Message sent');
-      document.getElementById('messageInput').value = '';
     }
 
     function renderMessage(role, text) {
       const div = document.createElement('div');
       div.className = 'msg' + (role === 'Assistant' ? ' assistant' : '');
-      div.innerHTML = '<strong>' + role + ':</strong> ' + text.replace(/\n/g, '<br>');
+      div.innerHTML = '<strong>' + role + ':</strong> ' + String(text).replace(/\n/g, '<br>');
       document.getElementById('messages').appendChild(div);
     }
 
