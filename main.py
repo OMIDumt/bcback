@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from api.routes import router
 from database import init_db
 from config import get_settings
@@ -46,6 +47,94 @@ def read_root():
         "version": "1.0.0",
         "docs": "/docs"
     }
+
+
+@app.get("/chat-test", response_class=HTMLResponse)
+def chat_test_page():
+    """Simple browser-based chat tester for Railway deployment."""
+    return HTMLResponse(content="""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Railway Chat Tester</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+    input, button, textarea { font-size: 16px; padding: 10px; margin: 6px 0; width: 100%; box-sizing: border-box; }
+    button { cursor: pointer; }
+    .box { border: 1px solid #ddd; padding: 12px; margin-top: 12px; border-radius: 8px; }
+    .msg { margin: 8px 0; padding: 10px; border-radius: 6px; background: #f7f7f7; }
+    .assistant { background: #eef6ff; }
+  </style>
+</head>
+<body>
+  <h1>Railway Chat Tester</h1>
+  <p>Open this page on your Railway deployment to test the chatbot directly.</p>
+  <button id="createBtn">Create conversation</button>
+  <div id="status" class="box">Status: waiting</div>
+  <div class="box">
+    <label>Message</label>
+    <textarea id="messageInput" rows="3" placeholder="Type your message here"></textarea>
+    <button id="sendBtn">Send message</button>
+  </div>
+  <div id="messages" class="box"></div>
+
+  <script>
+    const apiBase = window.location.origin + '/api/chat';
+    let conversationId = null;
+
+    async function createConversation() {
+      setStatus('Creating conversation...');
+      const res = await fetch(apiBase + '/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Railway Test' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to create conversation');
+      conversationId = data.id;
+      setStatus('Conversation created: ' + conversationId);
+      renderMessage('System', 'Conversation ready.');
+    }
+
+    async function sendMessage() {
+      if (!conversationId) {
+        await createConversation();
+      }
+      const message = document.getElementById('messageInput').value.trim();
+      if (!message) return;
+      setStatus('Sending message...');
+      const res = await fetch(apiBase + '/conversations/' + conversationId + '/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to send message');
+      renderMessage('You', message);
+      renderMessage('Assistant', data.assistant_message.content);
+      setStatus('Message sent');
+      document.getElementById('messageInput').value = '';
+    }
+
+    function renderMessage(role, text) {
+      const div = document.createElement('div');
+      div.className = 'msg' + (role === 'Assistant' ? ' assistant' : '');
+      div.innerHTML = '<strong>' + role + ':</strong> ' + text.replace(/\n/g, '<br>');
+      document.getElementById('messages').appendChild(div);
+    }
+
+    function setStatus(text) {
+      document.getElementById('status').innerText = 'Status: ' + text;
+    }
+
+    document.getElementById('createBtn').onclick = createConversation;
+    document.getElementById('sendBtn').onclick = sendMessage;
+  </script>
+</body>
+</html>
+""")
 
 
 if __name__ == "__main__":
